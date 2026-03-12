@@ -2,63 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Space Defender</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
       background: #000;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
+      height: 100%;
       font-family: 'Courier New', monospace;
       color: #fff;
       overflow: hidden;
+      touch-action: none;
     }
     h1 {
       color: #0af;
-      font-size: 2rem;
+      font-size: clamp(1rem, 4vw, 2rem);
       letter-spacing: 4px;
       text-shadow: 0 0 20px #0af;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     #hud {
       display: flex;
-      gap: 40px;
-      margin-bottom: 8px;
-      font-size: 1rem;
+      gap: clamp(10px, 4vw, 40px);
+      margin-bottom: 6px;
+      font-size: clamp(0.6rem, 2.5vw, 1rem);
       letter-spacing: 2px;
     }
     #hud span { color: #0af; }
+    #canvasWrap {
+      position: relative;
+      width: min(600px, 98vw);
+      aspect-ratio: 6/5;
+    }
     canvas {
       border: 1px solid #0af;
       box-shadow: 0 0 30px #0af4, 0 0 60px #0af2;
       display: block;
-    }
-    #controls {
-      margin-top: 10px;
-      font-size: 0.7rem;
-      color: #555;
-      letter-spacing: 1px;
+      width: 100%;
+      height: 100%;
     }
     #overlay {
       position: absolute;
+      inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 16px;
+      gap: 12px;
       pointer-events: none;
     }
     #overlay h2 {
-      font-size: 2.5rem;
+      font-size: clamp(1.2rem, 5vw, 2.5rem);
       letter-spacing: 6px;
       text-shadow: 0 0 30px currentColor;
     }
     #overlay p {
-      font-size: 1rem;
+      font-size: clamp(0.7rem, 2.5vw, 1rem);
       color: #aaa;
       letter-spacing: 2px;
     }
@@ -69,16 +73,64 @@
       color: #0af;
       padding: 10px 32px;
       font-family: 'Courier New', monospace;
-      font-size: 1rem;
+      font-size: clamp(0.8rem, 3vw, 1rem);
       letter-spacing: 3px;
       cursor: pointer;
       text-shadow: 0 0 10px #0af;
       box-shadow: 0 0 20px #0af4;
       transition: all 0.2s;
     }
-    #overlay button:hover {
+    #overlay button:hover, #overlay button:active {
       background: #0af2;
       box-shadow: 0 0 30px #0af8;
+    }
+    /* Touch controls */
+    #touch-controls {
+      display: none;
+      width: min(600px, 98vw);
+      margin-top: 10px;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .touch-btn {
+      background: rgba(0, 170, 255, 0.1);
+      border: 2px solid #0af;
+      color: #0af;
+      font-size: 1.6rem;
+      border-radius: 12px;
+      cursor: pointer;
+      user-select: none;
+      text-shadow: 0 0 10px #0af;
+      box-shadow: 0 0 15px #0af3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s;
+      -webkit-user-select: none;
+    }
+    .touch-btn:active, .touch-btn.pressed {
+      background: rgba(0, 170, 255, 0.35);
+    }
+    #btn-left, #btn-right {
+      width: 90px;
+      height: 70px;
+    }
+    #btn-fire {
+      flex: 1;
+      height: 70px;
+      font-size: 1rem;
+      letter-spacing: 3px;
+    }
+    #controls {
+      margin-top: 8px;
+      font-size: 0.65rem;
+      color: #444;
+      letter-spacing: 1px;
+    }
+    @media (pointer: coarse) {
+      #touch-controls { display: flex; }
+      #controls { display: none; }
     }
   </style>
 </head>
@@ -89,13 +141,19 @@
     <div>LEVEL: <span id="levelDisplay">1</span></div>
     <div>LIVES: <span id="livesDisplay">&#9829;&#9829;&#9829;</span></div>
   </div>
-  <div style="position:relative">
+  <div id="canvasWrap">
     <canvas id="canvas" width="600" height="500"></canvas>
     <div id="overlay">
       <h2 id="overlayTitle" style="color:#0af">SPACE DEFENDER</h2>
       <p id="overlayMsg">Defend the galaxy from alien invaders!</p>
       <button id="overlayBtn" onclick="startGame()">LAUNCH</button>
     </div>
+  </div>
+  <!-- Touch controls (shown on touch devices) -->
+  <div id="touch-controls">
+    <button class="touch-btn" id="btn-left">&#9664;</button>
+    <button class="touch-btn" id="btn-fire">FIRE</button>
+    <button class="touch-btn" id="btn-right">&#9654;</button>
   </div>
   <div id="controls">ARROW KEYS — Move &nbsp;|&nbsp; SPACE — Fire &nbsp;|&nbsp; P — Pause</div>
 
@@ -105,7 +163,7 @@ const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 
 // ── State ────────────────────────────────────────────────────────────────────
-let state = 'menu'; // menu | playing | paused | dead | win
+let state = 'menu';
 let score = 0, lives = 3, level = 1;
 let animId;
 
@@ -119,13 +177,13 @@ const stars = Array.from({length: 120}, () => ({
 }));
 
 // ── Player ───────────────────────────────────────────────────────────────────
-const player = { x: W/2, y: H - 60, w: 38, h: 32, speed: 5, color: '#0af',
+const player = { x: W/2, y: H - 60, w: 38, h: 32, speed: 5,
                   invincible: 0, shootCooldown: 0 };
 const bullets = [];
 const particles = [];
 
 // ── Enemies ──────────────────────────────────────────────────────────────────
-let enemies = [], enemyBullets = [], enemyDir = 1, enemyDropTimer = 0;
+let enemies = [], enemyBullets = [], enemyDir = 1;
 const ENEMY_COLS = 10, ENEMY_ROWS = 4;
 const ENEMY_W = 32, ENEMY_H = 22, ENEMY_PAD = 14;
 
@@ -138,26 +196,41 @@ function buildEnemies() {
         x: startX + c * (ENEMY_W + ENEMY_PAD),
         y: 60 + r * (ENEMY_H + ENEMY_PAD),
         w: ENEMY_W, h: ENEMY_H,
-        row: r,
-        alive: true,
+        row: r, alive: true,
         animTick: Math.random() * Math.PI * 2
       });
     }
   }
 }
 
-// ── Keys ─────────────────────────────────────────────────────────────────────
+// ── Keyboard input ────────────────────────────────────────────────────────────
 const keys = {};
 document.addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'KeyP' && state === 'playing') pauseGame();
-  else if (e.code === 'KeyP' && state === 'paused') resumeGame();
+  if (e.code === 'KeyP' && state === 'playing') state = 'paused';
+  else if (e.code === 'KeyP' && state === 'paused') state = 'playing';
   if (e.code === 'Space') e.preventDefault();
 });
 document.addEventListener('keyup', e => keys[e.code] = false);
 
+// ── Touch input ───────────────────────────────────────────────────────────────
+function bindBtn(id, key) {
+  const el = document.getElementById(id);
+  const press   = e => { e.preventDefault(); keys[key] = true;  el.classList.add('pressed'); };
+  const release = e => { e.preventDefault(); keys[key] = false; el.classList.remove('pressed'); };
+  el.addEventListener('touchstart',  press,   { passive: false });
+  el.addEventListener('touchend',    release, { passive: false });
+  el.addEventListener('touchcancel', release, { passive: false });
+  // Also support mouse for hybrid devices
+  el.addEventListener('mousedown', press);
+  el.addEventListener('mouseup',   release);
+  el.addEventListener('mouseleave',release);
+}
+bindBtn('btn-left',  'ArrowLeft');
+bindBtn('btn-right', 'ArrowRight');
+bindBtn('btn-fire',  'Space');
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function rect(x, y, w, h) { return {x, y, w, h}; }
 function collide(a, b) {
   return a.x - a.w/2 < b.x + b.w/2 && a.x + a.w/2 > b.x - b.w/2 &&
          a.y - a.h/2 < b.y + b.h/2 && a.y + a.h/2 > b.y - b.h/2;
@@ -182,27 +255,26 @@ function spawnParticles(x, y, color, count=12) {
 function updateHUD() {
   document.getElementById('scoreDisplay').textContent = score;
   document.getElementById('levelDisplay').textContent = level;
-  const hearts = '♥'.repeat(lives) + '♡'.repeat(Math.max(0, 3 - lives));
-  document.getElementById('livesDisplay').textContent = hearts;
+  document.getElementById('livesDisplay').textContent =
+    '♥'.repeat(lives) + '♡'.repeat(Math.max(0, 3 - lives));
 }
 
 // ── Draw helpers ─────────────────────────────────────────────────────────────
-function drawShip(x, y, w, h, color, glow) {
+function drawShip(x, y, w, h, color) {
   ctx.save();
   ctx.shadowColor = color;
-  ctx.shadowBlur = glow ? 20 : 0;
+  ctx.shadowBlur = 20;
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.moveTo(x, y - h/2);           // nose
-  ctx.lineTo(x - w/2, y + h/2);     // bottom-left
-  ctx.lineTo(x - w/4, y + h/4);     // inner-left
-  ctx.lineTo(x, y + h/3);           // center bottom
-  ctx.lineTo(x + w/4, y + h/4);     // inner-right
-  ctx.lineTo(x + w/2, y + h/2);     // bottom-right
+  ctx.moveTo(x, y - h/2);
+  ctx.lineTo(x - w/2, y + h/2);
+  ctx.lineTo(x - w/4, y + h/4);
+  ctx.lineTo(x, y + h/3);
+  ctx.lineTo(x + w/4, y + h/4);
+  ctx.lineTo(x + w/2, y + h/2);
   ctx.closePath();
   ctx.fill();
-  // cockpit
-  ctx.fillStyle = glow ? '#fff' : '#80dfff';
+  ctx.fillStyle = '#fff';
   ctx.beginPath();
   ctx.ellipse(x, y - h/6, w/6, h/5, 0, 0, Math.PI*2);
   ctx.fill();
@@ -215,23 +287,19 @@ function drawEnemy(e, tick) {
   const colors = ['#f55', '#fa0', '#0f8', '#a0f'];
   const color = colors[e.row % colors.length];
   ctx.save();
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 12;
+  ctx.shadowColor = color; ctx.shadowBlur = 12;
   ctx.fillStyle = color;
-  // body
   ctx.beginPath();
-  ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+  ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI*2);
   ctx.fill();
-  // wings (animated)
-  ctx.fillStyle = color + 'aa';
   const wingFlap = Math.sin(t) * 4;
+  ctx.fillStyle = color + 'aa';
   ctx.beginPath();
   ctx.ellipse(e.x - e.w/2 - 4, e.y + wingFlap, e.w/3, e.h/4, -0.5, 0, Math.PI*2);
   ctx.fill();
   ctx.beginPath();
   ctx.ellipse(e.x + e.w/2 + 4, e.y - wingFlap, e.w/3, e.h/4, 0.5, 0, Math.PI*2);
   ctx.fill();
-  // eyes
   ctx.fillStyle = '#000';
   ctx.beginPath(); ctx.arc(e.x - 6, e.y - 2, 3, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(e.x + 6, e.y - 2, 3, 0, Math.PI*2); ctx.fill();
@@ -247,7 +315,6 @@ let tick = 0;
 function update() {
   tick++;
 
-  // Move stars
   for (const s of stars) {
     s.y += s.speed;
     if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
@@ -256,17 +323,16 @@ function update() {
   if (state !== 'playing') return;
 
   // Player movement
-  if (keys['ArrowLeft'] || keys['KeyA']) player.x = Math.max(player.w/2, player.x - player.speed);
+  if (keys['ArrowLeft']  || keys['KeyA']) player.x = Math.max(player.w/2, player.x - player.speed);
   if (keys['ArrowRight'] || keys['KeyD']) player.x = Math.min(W - player.w/2, player.x + player.speed);
 
   // Shoot
   if (player.shootCooldown > 0) player.shootCooldown--;
   if ((keys['Space'] || keys['ArrowUp']) && player.shootCooldown === 0) {
-    bullets.push({ x: player.x, y: player.y - player.h/2, vx: 0, vy: -10, w: 4, h: 14, color: '#0ff' });
+    bullets.push({ x: player.x, y: player.y - player.h/2, vy: -10, w: 4, h: 14, color: '#0ff' });
     player.shootCooldown = 14;
   }
 
-  // Move player bullets
   for (let i = bullets.length - 1; i >= 0; i--) {
     bullets[i].y += bullets[i].vy;
     if (bullets[i].y < -20) bullets.splice(i, 1);
@@ -292,35 +358,32 @@ function update() {
   const shootRate = Math.max(20, 90 - level * 8);
   if (tick % shootRate === 0 && alive.length > 0) {
     const shooter = alive[Math.floor(Math.random() * alive.length)];
-    enemyBullets.push({ x: shooter.x, y: shooter.y + shooter.h/2, w: 5, h: 12,
-                        vy: 3 + level * 0.3, color: '#f55' });
+    enemyBullets.push({ x: shooter.x, y: shooter.y + shooter.h/2,
+                        w: 5, h: 12, vy: 3 + level * 0.3, color: '#f55' });
   }
 
-  // Move enemy bullets
   for (let i = enemyBullets.length - 1; i >= 0; i--) {
     enemyBullets[i].y += enemyBullets[i].vy;
     if (enemyBullets[i].y > H + 20) enemyBullets.splice(i, 1);
   }
 
-  // Update particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx; p.y += p.vy; p.life -= p.decay;
     if (p.life <= 0) particles.splice(i, 1);
   }
 
-  // Bullet vs Enemy collisions
-  for (let bi = bullets.length - 1; bi >= 0; bi--) {
-    const b = bullets[bi];
+  // Bullet vs Enemy
+  outer: for (let bi = bullets.length - 1; bi >= 0; bi--) {
     for (const e of alive) {
-      if (collide(b, e)) {
+      if (collide(bullets[bi], e)) {
         e.alive = false;
-        bullets.splice(bi, 1);
         const pts = (ENEMY_ROWS - e.row) * 10;
         score += pts;
         spawnParticles(e.x, e.y, ['#f55','#fa0','#0f8','#a0f'][e.row % 4], 14);
         updateHUD();
-        break;
+        bullets.splice(bi, 1);
+        continue outer;
       }
     }
   }
@@ -330,15 +393,11 @@ function update() {
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
       if (collide(enemyBullets[i], player)) {
         enemyBullets.splice(i, 1);
-        hitPlayer();
-        break;
-      }
-    }
-    // Enemy reaches player row
-    for (const e of alive) {
-      if (e.y + e.h/2 >= player.y - player.h/2) {
         hitPlayer(); break;
       }
+    }
+    for (const e of alive) {
+      if (e.y + e.h/2 >= player.y - player.h/2) { hitPlayer(); break; }
     }
   } else {
     player.invincible--;
@@ -361,9 +420,10 @@ function nextLevel() {
   bullets.length = 0;
   buildEnemies();
   enemyDir = 1;
-  showOverlay('LEVEL ' + level, '500 BONUS POINTS!', 'CONTINUE', () => {});
-  // auto-resume after 2s
-  setTimeout(() => { hideOverlay(); state = 'playing'; }, 2000);
+  state = 'paused';
+  showOverlay('LEVEL ' + level, '500 BONUS POINTS!', 'CONTINUE', () => {
+    hideOverlay(); state = 'playing';
+  });
 }
 
 function gameOver() {
@@ -374,12 +434,9 @@ function gameOver() {
 // ── Draw ─────────────────────────────────────────────────────────────────────
 function draw() {
   ctx.clearRect(0, 0, W, H);
-
-  // Background
   ctx.fillStyle = '#000308';
   ctx.fillRect(0, 0, W, H);
 
-  // Stars
   for (const s of stars) {
     ctx.globalAlpha = s.alpha;
     ctx.fillStyle = '#fff';
@@ -389,7 +446,6 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  // Particles
   for (const p of particles) {
     ctx.globalAlpha = p.life;
     ctx.fillStyle = p.color;
@@ -401,13 +457,11 @@ function draw() {
 
   if (state === 'menu') return;
 
-  // Player (blink when invincible)
+  // Player
   if (player.invincible === 0 || Math.floor(player.invincible / 6) % 2 === 0) {
-    drawShip(player.x, player.y, player.w, player.h, '#0af', true);
-    // engine glow
+    drawShip(player.x, player.y, player.w, player.h, '#0af');
     ctx.save();
-    ctx.shadowColor = '#0af';
-    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#0af'; ctx.shadowBlur = 15;
     ctx.fillStyle = '#0af8';
     ctx.beginPath();
     ctx.ellipse(player.x, player.y + player.h/2, player.w/5, 6, 0, 0, Math.PI*2);
@@ -415,24 +469,19 @@ function draw() {
     ctx.restore();
   }
 
-  // Enemies
   for (const e of enemies) drawEnemy(e, tick);
 
-  // Player bullets
   for (const b of bullets) {
     ctx.save();
-    ctx.shadowColor = b.color;
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = b.color; ctx.shadowBlur = 10;
     ctx.fillStyle = b.color;
     ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
     ctx.restore();
   }
 
-  // Enemy bullets
   for (const b of enemyBullets) {
     ctx.save();
-    ctx.shadowColor = b.color;
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = b.color; ctx.shadowBlur = 8;
     ctx.fillStyle = b.color;
     ctx.beginPath();
     ctx.ellipse(b.x, b.y, b.w/2, b.h/2, 0, 0, Math.PI*2);
@@ -440,23 +489,16 @@ function draw() {
     ctx.restore();
   }
 
-  // Ground line
-  ctx.strokeStyle = '#0af3';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, H - 20);
-  ctx.lineTo(W, H - 20);
-  ctx.stroke();
+  ctx.strokeStyle = '#0af3'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H - 20); ctx.lineTo(W, H - 20); ctx.stroke();
 
-  // Pause banner
-  if (state === 'paused') {
+  if (state === 'paused' && !document.getElementById('overlay').style.display.includes('flex')) {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, H/2 - 40, W, 80);
     ctx.fillStyle = '#0af';
     ctx.font = 'bold 2rem Courier New';
     ctx.textAlign = 'center';
-    ctx.shadowColor = '#0af';
-    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#0af'; ctx.shadowBlur = 20;
     ctx.fillText('PAUSED', W/2, H/2 + 10);
     ctx.shadowBlur = 0;
   }
@@ -469,7 +511,7 @@ function loop() {
   animId = requestAnimationFrame(loop);
 }
 
-// ── Overlay helpers ───────────────────────────────────────────────────────────
+// ── Overlay ───────────────────────────────────────────────────────────────────
 function showOverlay(title, msg, btnLabel, cb) {
   document.getElementById('overlayTitle').textContent = title;
   document.getElementById('overlayMsg').textContent = msg;
@@ -490,13 +532,6 @@ function startGame() {
   buildEnemies();
   enemyDir = 1;
   updateHUD();
-  state = 'playing';
-}
-
-function pauseGame() {
-  state = 'paused';
-}
-function resumeGame() {
   state = 'playing';
 }
 
