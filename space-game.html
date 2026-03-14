@@ -168,8 +168,16 @@ const W = canvas.width, H = canvas.height;
 let audioCtx;
 function getAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // iOS requires resume() after a user gesture
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
+// Unlock audio on first touch/click/key (required on iOS Safari)
+function unlockAudio() { getAudio(); }
+document.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
+document.addEventListener('mousedown',  unlockAudio, { once: true });
+document.addEventListener('keydown',    unlockAudio, { once: true });
+
 function beep(freq, dur, type='sine', vol=0.25) {
   try {
     const a = getAudio();
@@ -182,16 +190,61 @@ function beep(freq, dur, type='sine', vol=0.25) {
     osc.start(); osc.stop(a.currentTime + dur);
   } catch(e) {}
 }
-function shootSound() { beep(1200, 0.08, 'square', 0.15); }
-function popSound()   {
-  beep(600, 0.06, 'sine', 0.2);
-  setTimeout(() => beep(900, 0.08, 'sine', 0.2), 40);
-  setTimeout(() => beep(1200, 0.12, 'sine', 0.2), 80);
+function shootSound() {
+  beep(1400, 0.04, 'square', 0.12);
+  setTimeout(() => beep(1000, 0.06, 'square', 0.08), 35);
 }
-function hurtSound()  { beep(180, 0.3, 'sawtooth', 0.2); }
-function winSound()   {
-  [523,659,784,1047].forEach((f,i) => setTimeout(() => beep(f,0.18,'sine',0.2), i*100));
+function popSound() {
+  beep(700,  0.06, 'sine', 0.22);
+  setTimeout(() => beep(950,  0.07, 'sine', 0.22), 45);
+  setTimeout(() => beep(1300, 0.12, 'sine', 0.22), 90);
 }
+function hurtSound() {
+  beep(200, 0.15, 'sawtooth', 0.2);
+  setTimeout(() => beep(150, 0.2, 'sawtooth', 0.15), 100);
+}
+function winSound() {
+  [523,659,784,1047,1319].forEach((f,i) => setTimeout(() => beep(f,0.18,'sine',0.22), i*90));
+}
+function gameOverSound() {
+  [400,350,300,250,200].forEach((f,i) => setTimeout(() => beep(f,0.2,'triangle',0.2), i*100));
+}
+
+// ── Background music ──────────────────────────────────────────────────────────
+// Happy "Twinkle Twinkle" melody (C major, two phrases)
+const MELODY = [
+  523,523,784,784,880,880,784,0,
+  698,698,659,659,587,587,523,0,
+  784,784,698,698,659,659,587,0,
+  784,784,698,698,659,659,587,0,
+  523,523,784,784,880,880,784,0,
+  698,698,659,659,587,587,523,0
+];
+// Gentle bass line (root notes)
+const BASS = [
+  131,0,131,0,131,0,131,0,
+  175,0,175,0,175,0,175,0,
+  131,0,131,0,131,0,131,0,
+  131,0,131,0,131,0,131,0,
+  131,0,131,0,131,0,131,0,
+  175,0,175,0,175,0,175,0
+];
+let melodyStep = 0, musicTimer = null;
+const TEMPO = 210; // ms per beat
+
+function playMusicBeat() {
+  if (musicTimer) clearTimeout(musicTimer);
+  const idx = melodyStep % MELODY.length;
+  if (state === 'playing') {
+    const mf = MELODY[idx];
+    const bf = BASS[idx];
+    if (mf) beep(mf, TEMPO * 0.008 * 24, 'triangle', 0.07);
+    if (bf) beep(bf, TEMPO * 0.008 * 22, 'sine',     0.06);
+  }
+  melodyStep++;
+  musicTimer = setTimeout(playMusicBeat, TEMPO);
+}
+function startMusic() { melodyStep = 0; playMusicBeat(); }
 
 // ── State ────────────────────────────────────────────────────────────────────
 let state = 'menu';
@@ -223,7 +276,7 @@ const ENEMY_W = 34, ENEMY_H = 26, ENEMY_PAD = 16;
 // Cute enemy types per row
 const ENEMY_TYPES = [
   { color: '#ff69b4', face: 'cat',      bow: true  },   // row 0 – pink kitty
-  { color: '#a98fff', face: 'blob',     bow: false },   // row 1 – purple blob
+  { color: '#ff3333', face: 'blob',     bow: false },   // row 1 – red blob
   { color: '#ffdd57', face: 'star',     bow: true  },   // row 2 – yellow star buddy
   { color: '#80ffe8', face: 'jelly',    bow: false },   // row 3 – mint jelly
 ];
@@ -652,6 +705,7 @@ function nextLevel() {
 
 function gameOver() {
   state = 'dead';
+  gameOverSound();
   showOverlay('💫 Nice Try! 💫', 'You collected ' + score + ' stars! ⭐', '🚀 Play Again!', startGame);
 }
 
@@ -757,6 +811,7 @@ function startGame() {
   enemyDir = 1;
   updateHUD();
   state = 'playing';
+  startMusic();
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
