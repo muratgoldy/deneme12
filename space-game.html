@@ -210,41 +210,6 @@ function gameOverSound() {
   [400,350,300,250,200].forEach((f,i) => setTimeout(() => beep(f,0.2,'triangle',0.2), i*100));
 }
 
-// ── Background music ──────────────────────────────────────────────────────────
-// Happy "Twinkle Twinkle" melody (C major, two phrases)
-const MELODY = [
-  523,523,784,784,880,880,784,0,
-  698,698,659,659,587,587,523,0,
-  784,784,698,698,659,659,587,0,
-  784,784,698,698,659,659,587,0,
-  523,523,784,784,880,880,784,0,
-  698,698,659,659,587,587,523,0
-];
-// Gentle bass line (root notes)
-const BASS = [
-  131,0,131,0,131,0,131,0,
-  175,0,175,0,175,0,175,0,
-  131,0,131,0,131,0,131,0,
-  131,0,131,0,131,0,131,0,
-  131,0,131,0,131,0,131,0,
-  175,0,175,0,175,0,175,0
-];
-let melodyStep = 0, musicTimer = null;
-const TEMPO = 210; // ms per beat
-
-function playMusicBeat() {
-  if (musicTimer) clearTimeout(musicTimer);
-  const idx = melodyStep % MELODY.length;
-  if (state === 'playing') {
-    const mf = MELODY[idx];
-    const bf = BASS[idx];
-    if (mf) beep(mf, TEMPO / 1000 * 0.75, 'triangle', 0.07);
-    if (bf) beep(bf, TEMPO / 1000 * 0.65, 'sine',     0.06);
-  }
-  melodyStep++;
-  musicTimer = setTimeout(playMusicBeat, TEMPO);
-}
-function startMusic() { melodyStep = 0; playMusicBeat(); }
 
 // ── State ────────────────────────────────────────────────────────────────────
 let state = 'menu';
@@ -847,7 +812,6 @@ function startGame() {
   enemyDir = 1;
   updateHUD();
   state = 'playing';
-  startMusic();
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
