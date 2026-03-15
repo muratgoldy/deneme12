@@ -616,7 +616,8 @@ function update() {
   }
   if (hitEdge) {
     enemyDir *= -1;
-    for (const e of alive) e.y += 16;
+    const drop = Math.max(6, 16 - level * 1.5);
+    for (const e of alive) e.y += drop;
   }
 
   // Enemy shoot – slower
@@ -664,6 +665,11 @@ function update() {
     }
   }
 
+  // Enemy reaches player level → instant game over (can't shoot them at this point)
+  for (const e of alive) {
+    if (e.y + e.h/2 >= player.y - player.h/2) { gameOver(); return; }
+  }
+
   // Enemy bullet vs Player
   if (player.invincible === 0) {
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
@@ -672,15 +678,13 @@ function update() {
         hitPlayer(); break;
       }
     }
-    for (const e of alive) {
-      if (e.y + e.h/2 >= player.y - player.h/2) { hitPlayer(); break; }
-    }
   } else {
     player.invincible--;
   }
 }
 
 function hitPlayer() {
+  if (state !== 'playing') return;
   spawnParticles(player.x, player.y, 18);
   hurtSound();
   lives--;
